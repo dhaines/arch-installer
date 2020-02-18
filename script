@@ -94,7 +94,7 @@ arch-chroot /mnt bash <<- EOD
 		linux	/vmlinuz-linux
 		initrd /intel-ucode.img
 		initrd /initramfs-linux.img
-		options root=LABEL=root rw
+		options root=LABEL=root rw console=tty0 console=ttyS0
 	EOF
 EOD
 
