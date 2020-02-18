@@ -49,16 +49,16 @@ mount /dev/disk/by-label/boot /mnt/boot
 swapon /dev/vg0/swap
 
 # Install all the files
-pacstrap /mnt base linux linux-firmware lvm2 mdadm intel-ucode vi wpa_supplicant
+pacstrap /mnt base linux linux-firmware lvm2 mdadm intel-ucode wpa_supplicant vi bash-completion
 
-# Generate fstab
+# Generate storage configuration
 genfstab -U /mnt >> /mnt/etc/fstab
-mdadm -D --scan >> /mnt/etc/mdadm.conf
+mdadm --detail --scan >> /mnt/etc/mdadm.conf
 
 # the following must be indented by tabs, not spaces
 arch-chroot /mnt bash <<- EOD
 	set -ex
-	# Set time zone
+	# Set time
 	#ln -sf /usr/share/zoneinfo/Region/City /etc/localtime
 	hwclock --systohc
 	
@@ -96,7 +96,6 @@ arch-chroot /mnt bash <<- EOD
 		initrd /initramfs-linux.img
 		options root=LABEL=root rw
 	EOF
-	
 EOD
 
 reboot
