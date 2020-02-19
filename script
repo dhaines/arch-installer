@@ -21,9 +21,9 @@ done
 vgcreate vg0 /dev/disk/by-partlabel/pv*
 
 # Create LVM LVs
-lvcreate vg0 -L 2G -n root
-lvcreate vg0 -L 1G -n var
-lvcreate vg0 -L 1G -n swap
+lvcreate vg0 -L 2G -n root --type raid0
+lvcreate vg0 -L 1G -n var --type raid0
+lvcreate vg0 -L 1G -n swap --type raid0
 
 # Format everything
 mkfs.fat -F32 -n boot /dev/disk/by-partlabel/boot
@@ -69,6 +69,7 @@ arch-chroot /mnt bash <<- EOD
 	
 	# Add initcpio support for storage
 	sed -i '/^HOOKS=/{ s/udev/systemd/; s/block/& sd-lvm2/; }' /etc/mkinitcpio.conf
+	sed -i '/^MODULES=/{ s/(/&dm-raid raid0/; }' /etc/mkinitcpio.conf
 	mkinitcpio -P
 	
 	# Install boot loader
