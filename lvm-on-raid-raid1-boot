@@ -8,23 +8,25 @@ mapfile -t DEVICES < <(lsblk -pindo NAME -e 7,11)
 # Create a boot partition on the 0th and make RAID devices out of the remainder
 for i in ${!DEVICES[@]} ; do
   sgdisk --zap-all ${DEVICES[$i]}
-  [ ${i} == 0 ] && sgdisk -n 0:0:+1GiB -t 0:ef00 -c 0:boot ${DEVICES[$i]}
+  sgdisk -n 0:0:+1GiB -t 0:fd00 -c 0:boot${i} ${DEVICES[$i]}
   sgdisk -n 0:0:0 -t 0:fd00 -c 0:dev${i} ${DEVICES[$i]}
 done
 
 # Set up RAID across devices
 modprobe raid0
 echo 2 > /sys/module/raid0/parameters/default_layout
-for device in /dev/disk/by-partlabel/dev* ; do
+for device in /dev/disk/by-partlabel/boot* /dev/disk/by-partlabel/dev* ; do
   mdadm --misc --zero-superblock ${device}
 done
-mdadm -C /dev/md0 -l0 -n2 -N array0 /dev/disk/by-partlabel/dev*
+mdadm -C /dev/md0 -l1 -n2 -N array0 --metadata 1.0 /dev/disk/by-partlabel/boot*
+sgdisk -n 0:0:0 -t 0:ef00 -c 0:boot /dev/md0
+mdadm -C /dev/md1 -l0 -n2 -N array1 /dev/disk/by-partlabel/dev*
 
 # Create LVM PVs
-pvcreate /dev/md0
+pvcreate /dev/md1
 
 # Create LVM VGs
-vgcreate vg0 /dev/md0
+vgcreate vg0 /dev/md1
 
 # Create LVM LVs
 lvcreate vg0 -L 2G -n root
@@ -32,7 +34,7 @@ lvcreate vg0 -L 1G -n var
 lvcreate vg0 -L 1G -n swap
 
 # Format everything
-mkfs.fat -F32 -n boot /dev/disk/by-partlabel/boot
+mkfs.fat -F32 -n boot /dev/md0p1
 mkswap -L swap /dev/vg0/swap
 mkfs.ext4 -L root /dev/vg0/root
 mkfs.ext4 -L var /dev/vg0/var

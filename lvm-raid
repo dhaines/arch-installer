@@ -5,31 +5,25 @@ set -ex
 # Create an array of block devices, excluding cdroms and loopbacks
 mapfile -t DEVICES < <(lsblk -pindo NAME -e 7,11)
 
-# Create a boot partition on the 0th and make RAID devices out of the remainder
+# Create a boot partition on the 0th and make LVM PVs out of the remainder
 for i in ${!DEVICES[@]} ; do
   sgdisk --zap-all ${DEVICES[$i]}
   [ ${i} == 0 ] && sgdisk -n 0:0:+1GiB -t 0:ef00 -c 0:boot ${DEVICES[$i]}
-  sgdisk -n 0:0:0 -t 0:fd00 -c 0:dev${i} ${DEVICES[$i]}
+  sgdisk -n 0:0:0 -t 0:8e00 -c 0:pv${i} ${DEVICES[$i]}
 done
-
-# Set up RAID across devices
-modprobe raid0
-echo 2 > /sys/module/raid0/parameters/default_layout
-for device in /dev/disk/by-partlabel/dev* ; do
-  mdadm --misc --zero-superblock ${device}
-done
-mdadm -C /dev/md0 -l0 -n2 -N array0 /dev/disk/by-partlabel/dev*
 
 # Create LVM PVs
-pvcreate /dev/md0
+for device in /dev/disk/by-partlabel/pv* ; do
+	pvcreate ${device}
+done
 
 # Create LVM VGs
-vgcreate vg0 /dev/md0
+vgcreate vg0 /dev/disk/by-partlabel/pv*
 
 # Create LVM LVs
-lvcreate vg0 -L 2G -n root
-lvcreate vg0 -L 1G -n var
-lvcreate vg0 -L 1G -n swap
+lvcreate vg0 -L 2G -n root --type raid0
+lvcreate vg0 -L 1G -n var --type raid0
+lvcreate vg0 -L 1G -n swap --type raid0
 
 # Format everything
 mkfs.fat -F32 -n boot /dev/disk/by-partlabel/boot
@@ -49,11 +43,10 @@ mount /dev/disk/by-label/boot /mnt/boot
 swapon /dev/vg0/swap
 
 # Install all the files
-pacstrap /mnt base linux linux-firmware lvm2 mdadm intel-ucode wpa_supplicant vi bash-completion
+pacstrap /mnt base linux linux-firmware lvm2 intel-ucode wpa_supplicant vi bash-completion
 
 # Generate storage configuration
 genfstab -U /mnt >> /mnt/etc/fstab
-mdadm --detail --scan >> /mnt/etc/mdadm.conf
 
 # the following must be indented by tabs, not spaces
 arch-chroot /mnt bash <<- EOD
@@ -75,8 +68,7 @@ arch-chroot /mnt bash <<- EOD
 	EOF
 	
 	# Add initcpio support for storage
-	cat > /etc/modprobe.d/raid0.conf <<< 'options raid0 default_layout=2'
-	sed -i '/^HOOKS=/{ s/udev/systemd/; s/block/& mdadm_udev sd-lvm2/; }' /etc/mkinitcpio.conf
+	sed -i '/^HOOKS=/{ s/udev/systemd/; s/block/& sd-lvm2/; }' /etc/mkinitcpio.conf
 	sed -i '/^MODULES=/{ s/(/&dm-raid raid0/; }' /etc/mkinitcpio.conf
 	mkinitcpio -P
 	
