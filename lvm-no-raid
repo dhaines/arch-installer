@@ -59,7 +59,10 @@ arch-chroot /mnt bash <<- EOD
 	sed -i 's/^#.*\(en_US.UTF-8\)/\1/' /etc/locale.gen
 	locale-gen
 	cat > /etc/locale.conf <<< LANG=en_US.UTF-8
-
+	
+	# Set console font
+	cat > /etc/vconsole.conf <<< FONT=latarcyrheb-sun32
+	
 	# the following must be indented by tabs, not spaces
 	cat > /etc/hosts <<- EOF
 		127.0.0.1	localhost
